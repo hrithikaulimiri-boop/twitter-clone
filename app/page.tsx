@@ -4,6 +4,9 @@ import { addDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { auth } from "../firebase";
 import { db } from "../firebase";
+import { Timestamp } from "firebase/firestore";
+import { deleteDoc } from "firebase/firestore";
+
 
 import {
   GoogleAuthProvider,
@@ -14,6 +17,9 @@ import {
 
 import {
   collection,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
   query,
   orderBy,
   onSnapshot,
@@ -22,12 +28,17 @@ import {
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { timeStamp } from "console";
+import { format } from "path";
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [tweets, setTweets] = useState<any[]>([]);
   const [tweetText, setTweetText] = useState("");
   const [loadingTweets, setLoadingTweets] = useState(true);
+  const deleteTweet = async(tweetId: string) => {
+    await deleteDoc(doc(db, "tweets", tweetId));
+  };
   const sendTweet = async () => {
     if (!user) return;
     if (!tweetText.trim()) return;
@@ -39,6 +50,7 @@ export default function Home() {
       username: user.email.split("@")[0],
       photoURL: user.photoURL,
       timestamp: serverTimestamp(),
+      likes: [],
     });
     setTweetText("");
   };
@@ -49,6 +61,17 @@ export default function Home() {
 
   const logout = async () => {
     await signOut(auth);
+  };
+  const toggleLike = async (tweet) => {
+    if (!user) return;
+    const tweetRef = doc(db, "tweets", tweet.id);
+    const hasLiked = tweet.likes?.includes(user.uid);
+    await updateDoc(tweetRef, {
+      likes: hasLiked
+      ? arrayRemove(user.uid)
+      : arrayUnion(user.uid)
+
+    });
   };
 
   // 🔹 Auth listener + save user
@@ -81,6 +104,8 @@ export default function Home() {
   useEffect(() => {
     if (!user) return;
 
+    setLoadingTweets(true);
+
     const q = query(
       collection(db, "tweets"),
       orderBy("timestamp", "desc")
@@ -104,31 +129,69 @@ export default function Home() {
     return () => unsubscribe();
   }, [user]);
 
+  const formatTime = (timestamp: any) => {
+    if (!timestamp) return "";
+    const date = timestamp.toDate();
+    return date.toLocaleString();
+  };
+
   return (
-    <main className="flex min-h-screen bg-black text-white justify-center">
+    <main className="min-h-screen bg-black text-white flex justify-center">
+      <div className="w-full max-w-xl px-4 py-6">
       {!user ? (
-        <button
+        <div className="min-h screen flex items-center justify-center bg-black">
+          <div className="bg-[#0f172a] p-8 rounded-xl w-[350px] text center border border-gray-700 shadow-xlnded-2xl border border-gray-800 bg-black/80 p-8 text-center shadow-xl">
+
+          {/*Logo */}
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-blue-500">
+
+            </div>
+          </div>
+          {/*Title*/}
+          <h1 className="text-2xl font-bold mb-2">
+            Twitter Clone
+          </h1>
+          <p className="text-gray-400 text-sm mb-6">
+            See what's happening in the world right now
+          </p>
+          {/* Google Sign In */}
+          <button
           onClick={signInWithGoogle}
-          className="rounded bg-blue-500 px-6 py-2 font-bold"
-        >
-          Sign in with Google
-        </button>
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-full font-semibold flex items-center justify-center gap-2"
+          >
+            <img
+            src = "https://www.svgrepo.com/show/475656/google-color.svg"
+            alt="google"
+            className="w-5 h-5"
+            />
+            Sign In With Google
+          </button>
+          <p className="text-xs text-gray-500 mt-4">
+            By Signing In, You agree to our Terms and Privacy Policy
+          </p>
+          </div>
+        </div>
       ) : (
         <div className="flex flex-col items-center space-y-6 w-full max-w-xl py-6 overflow-y-auto">
 
           {/* PROFILE */}
-          <div className="text-center space-y-4">
-            <img
-              src={user.photoURL}
-              alt="profile"
-              className="mx-auto rounded-full w-20 h-20"
-            />
-            <h2 className="text-xl font-bold">{user.displayName}</h2>
-            <p className="text-sm text-gray-400">{user.email}</p>
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold">
 
-            <button
-              onClick={logout}
-              className="rounded bg-red-500 px-6 py-2 font-bold"
+              {user.displayName?.[0]}
+              </div>
+            
+            <h2 className="mt-2 text-lg font-semibold">
+              {user.displayName}
+            </h2>
+
+            <p className="text-gray-400 text-sm">
+              {user.email}
+            </p>
+            <button 
+            onClick={logout}
+            className="mt-3 bg-red-500 hover:bg-red-600 px-4 py-1 rounded text-sm"
             >
               Logout
             </button>
@@ -139,12 +202,21 @@ export default function Home() {
             value={tweetText}
             onChange={(e) => setTweetText(e.target.value)}
             placeholder="What's happening?"
-            className="w-full rounded bg-gray-900 border border-gray-700 p-3 text-white"
-            rows={3}
+            className="w-full bg-[#0f172a] border border-gray-700 rounded-lg p-3 text-white resize-none"
             />
             <button
             onClick={sendTweet}
-            className="bg-blue-500 px-4 py-2 rounded font-bold w-full"
+            disabled={!tweetText.trim()}
+
+            className={`mt-3 w-full py-2 rounded-full font-semibold
+              ${
+                tweetText.trim()
+                ? "bg-blue-500 hover:bg-blue-600"
+                : "bg-gray-600 cursor-not-allowed"
+
+              }
+            `}
+
             >
               Tweet
             </button>
@@ -164,13 +236,47 @@ export default function Home() {
               {tweets.map((tweet) => (
                 <div
                   key={tweet.id}
-                  className="border border-gray-700 p-4 rounded-lg"
+                  className="border border-gray-700 p-4 rounded-lg bg-[#020617]"
                 >
-                  <p className="font-bold">{tweet.name}</p>
-                  <p className="text-gray-400 text-sm">
-                    @{tweet.username}
-                  </p>
+                  <div className="flex-justify-between">
+                    <div>
+                      <p className="font-semibold">{tweet.name}</p>
+                      <p className="text-gray-400 text-sm">@{tweet.username}</p>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      {formatTime(tweet.timestamp)}
+                    </p>
+                  </div>
+
                   <p className="mt-2">{tweet.text}</p>
+
+                  <div className="flex items-counter gap-2 mt-3">
+                    <button
+                    onClick={() => toggleLike(tweet)}
+                    className={`text-sm ${
+                      tweet.likes?.includes(user.uid)
+                      ? "text-red-500"
+                      : "text-gray-400"
+                    }`}
+                    >
+                      Like ❤️
+                    </button>
+                    <span className="text-xs text-gray-400">
+                      {tweet.likes?.length || 0}
+
+                    </span>
+                  </div>
+
+                  {user.uid === tweet.uid && (
+                    <button
+                    onClick={() => deleteTweet(tweet.id, tweet.uid)}
+                    className="text-red-400 text-sm mt-2 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  )}
+
                 </div>
               ))}
             </div>
@@ -178,6 +284,7 @@ export default function Home() {
 
         </div>
       )}
+      </div>
     </main>
   );
 }
