@@ -31,9 +31,20 @@ import {
 import { timeStamp } from "console";
 import { format } from "path";
 
+type Tweet = {
+  id: string;
+  uid: string;
+  name: string;
+  username: string;
+  text: string;
+  timestamp?: any;
+  likes?: string[];
+};
+
+
 export default function Home() {
   const [user, setUser] = useState<any>(null);
-  const [tweets, setTweets] = useState<any[]>([]);
+  const [tweets, setTweets] = useState<Tweet[]>([]);
   const [tweetText, setTweetText] = useState("");
   const [loadingTweets, setLoadingTweets] = useState(true);
   const deleteTweet = async(tweetId: string) => {
@@ -62,7 +73,7 @@ export default function Home() {
   const logout = async () => {
     await signOut(auth);
   };
-  const toggleLike = async (tweet) => {
+  const toggleLike = async (tweet: Tweet) => {
     if (!user) return;
     const tweetRef = doc(db, "tweets", tweet.id);
     const hasLiked = tweet.likes?.includes(user.uid);
@@ -104,28 +115,21 @@ export default function Home() {
   useEffect(() => {
     if (!user) return;
 
-    setLoadingTweets(true);
-
     const q = query(
       collection(db, "tweets"),
       orderBy("timestamp", "desc")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTweets(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-      );
-      setLoadingTweets(false);
-    },
-  (error) => {
-    console.error("Tweets Listener error:", error);
-  
-  }
-);
+      const fetchedTweets: Tweet[] = snapshot.docs.map((doc) => ({
 
+        ...(doc.data() as Omit<Tweet, "id">),
+        id: doc.id,
+      }));
+      setTweets(fetchedTweets);
+      setLoadingTweets(false);
+  });
+  
     return () => unsubscribe();
   }, [user]);
 
@@ -233,7 +237,7 @@ export default function Home() {
           )}
           {tweets.length > 0 && (
             <div className="w-full max-w-md space-y-4">
-              {tweets.map((tweet) => (
+              {tweets.map((tweet: Tweet) => (
                 <div
                   key={tweet.id}
                   className="border border-gray-700 p-4 rounded-lg bg-[#020617]"
@@ -270,7 +274,7 @@ export default function Home() {
 
                   {user.uid === tweet.uid && (
                     <button
-                    onClick={() => deleteTweet(tweet.id, tweet.uid)}
+                    onClick={() => deleteTweet(tweet.id)}
                     className="text-red-400 text-sm mt-2 hover:underline"
                     >
                       Delete
